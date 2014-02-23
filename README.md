@@ -156,3 +156,48 @@ Wyszukiwanie odbywa się dość prosto:
     Document.search2("foo")
 
 Tutaj również zachęcam do eksperymentowania :)
+
+APPENDIX 1
+
+Dodajemy słownik do PG i wyszukujemy dane po słowach podobnych.
+
+1. Rozpakowujemy plik db/pl_ts gdzieś lokalnie
+
+2. Kopiujemy pliki do tsearch'a
+sudo cp * /usr/share/postgresql/9.3/tsearch_data
+
+3. Tworzymy konfigurację
+CREATE TEXT SEARCH CONFIGURATION public.polish ( COPY = pg_catalog.english );
+
+4. Tworzymy słownik
+CREATE TEXT SEARCH DICTIONARY warsztaty_ispell (TEMPLATE = ispell, DictFile = polish, AffFile = polish, StopWords = polish);
+
+5. Następnie tworzymy słownik synonimów
+CREATE TEXT SEARCH DICTIONARY warsztaty_syn (TEMPLATE = synonym, SYNONYMS = polish);
+
+6. Tezaurus
+CREATE TEXT SEARCH DICTIONARY warsztty_th (TEMPLATE = thesaurus, DictFile = polish, Dictionary = warsztaty_ispell);
+
+7. Na koniec wykonujemy konfigurację
+ALTER TEXT SEARCH CONFIGURATION polish ALTER MAPPING FOR hword_asciipart, asciihword, word, hword, hword_part, asciiword WITH warsztty_th, warsztaty_syn, warsztaty_ispell, simple;
+
+8. Proste testy
+SELECT plainto_tsquery('public.polish', 'dziewczynki');
+SELECT * FROM ts_debug('polish', 'chłopcami');
+SELECT to_tsvector('public.polish', 'wódzia')
+
+9. Tworzymy małą tabelkę z danymi przykładowymi
+CREATE TABLE warsztacik (example text NOT NULL,example_tsvector TSVECTOR);
+INSERT INTO warsztacik (example) VALUES ('Dawno temu pracowaliśmy razem');
+INSERT INTO warsztacik (example) VALUES ('Nigdy nie pracuję po godzinach');
+INSERT INTO warsztacik (example) VALUES ('Warto pracować aby mieć środki do życia');
+
+10. Aktualizujemy pole tsvector
+UPDATE warsztacik SET example_tsvector = to_tsvector('public.polish', example);
+
+11. Wykonujemy zapytania
+SELECT example FROM warsztacik WHERE example_tsvector @@ plainto_tsquery('public.polish', 'pracować');
+SELECT example FROM warsztacik WHERE example_tsvector @@ plainto_tsquery('public.polish', 'pracował');
+
+12. Przyspieszamy więc całą zabawę
+CREATE INDEX warsztacik_tsv_idx ON warsztacik USING GIN( example_tsvector );
