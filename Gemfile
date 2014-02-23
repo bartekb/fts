@@ -35,3 +35,6 @@ end
 gem 'faker'
 gem 'textacular', '~> 3.0'
 gem 'pg_search'
+
+gem 'tire'
+gem 'rails4-autocomplete'

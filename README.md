@@ -157,7 +157,7 @@ Wyszukiwanie odbywa się dość prosto:
 
 Tutaj również zachęcam do eksperymentowania :)
 
-APPENDIX 1
+### APPENDIX 1
 
 Dodajemy słownik do PG i wyszukujemy dane po słowach podobnych.
 
@@ -201,3 +201,182 @@ SELECT example FROM warsztacik WHERE example_tsvector @@ plainto_tsquery('public
 
 12. Przyspieszamy więc całą zabawę
 CREATE INDEX warsztacik_tsv_idx ON warsztacik USING GIN( example_tsvector );
+
+## Elastic Search
+
+### Wstęp do ES
+
+1. Pobieramy ES
+cd ~/Pobrane
+https://download.elasticsearch.org/elasticsearch/elasticsearch/elasticsearch-1.0.0.tar.gz
+
+2. Wypakowujemy do katalogu
+tar zxvf elasticsearch-1.0.0.tar.gz
+
+3. Uruchamiamy serwer
+cd elasticsearch-1.0.0
+bin/elasticsearch
+
+4. Odpalamy przeglądarkę
+http://localhost:9200/
+http://localhost:9200/_stats?pretty - podstawowe staty
+
+5. Jakieś przykładowe dane w plikach json-owych - tutaj dane z tutoriala do Railsów
+cat db/test1.json
+cat db/test2.json
+
+5. Mega proste użycie na początek :) Zapodajemy owe dane do FTS-a
+curl -XPOST http://localhost:9200/warsztaty/foo -T test1.json
+curl -XPOST http://localhost:9200/warsztaty/foo -T test2.json
+
+6. Jako zwrotkę otrzymujemy coś takiego:
+{"_index":"warsztaty","_type":"foo","_id":"JXmfkiBGR8ucZuOW3URXQg","_version":1,"created":true}
+
+7. Zerkamy na staty:
+http://localhost:9200/_stats?pretty zwracamy uwagę na "count" : 2 co mówi nam, że mamy dwa nowe dokumenty w bazie
+
+8. No to teraz coś wyszukamy (GET-em poprzez browsera)
+http://localhost:9200/_search?q=Ruby&pretty
+
+### Rails + ES
+
+1. Dodajemy gem 'tire' do Gemfile
+gem 'tire'
+
+2. Aktualizujemy gemy
+
+bundle install
+
+3. Tworzymy model dla naszych testów
+
+rails g model article title:string content:text
+rake db:migrate
+
+4. W modelu dodajemy właściwe includacje
+
+include Tire::Model::Search
+include Tire::Model::Callbacks
+
+5. Seedujemy danymi
+
+rake db:seed
+
+6. Sprawdzamy statystyki
+
+http://localhost:9200/articles/_stats?pretty
+
+7. Testujemy wyszukiwanie
+
+http://localhost:9200/_search?q=est&pretty
+
+detal poszczególnego artykułu możemy pobrać poprzez
+
+http://localhost:9200/articles/article/8980
+
+8. Mapowanie
+
+http://localhost:9200/articles/_mapping
+
+Możemy zmienić to zachowanie poprzez:
+
+mapping do
+    indexes :id,           :index    => :not_analyzed
+    indexes :title,        :analyzer => 'snowball', :boost => 100
+    indexes :content,      :analyzer => 'snowball'
+    indexes :created_at, :type => 'date', :include_in_all => false
+end
+
+9. Prosta aplikacja pokazująca jak pracować z wyszukiwaniem
+
+Tworzymy kontroler: 
+rails generate scaffold_controller Article
+
+10. Dodajemy do modelu Article
+
+def self.title_matches(args)
+    tire.search do
+        query {string "title:#{args}"}
+    end
+end
+
+11. Dodajemy metodę wyszukującą do kontrolera:
+
+def populate
+    articles = Article.title_matches(params[:q])
+    render :json => articles, :callback => params[:callback]
+end
+
+12. Po wszystkim szukamy
+
+http://localhost:3000/articles/populate.json?q=est 
+
+takiego URL-a możemy użyć w AJAX itd.
+
+13. Teraz skomplikujemy nieco bardziej wyszukiwanie
+
+tire.search do
+  query do
+    boolean do
+      must {string "title:#{args}"}
+      must {string "created_at:[2014-01-01 TO 2014-10-10]"}
+    end
+  end
+  highlight :title
+end
+
+i na koniec dajemy:
+
+http://localhost:3000/articles/populate.json?q=est
+
+14. Sortowanie
+
+sort do
+    by :title
+end
+
+15. Paginacja
+
+tire.search :page => page, :per_page => 5 do
+  query {string "title:#{args}"}
+end
+
+16. Filtry (facets) - mega prosty case
+
+filter :terms, :title => ["est"]
+facet "only_est" do
+terms :title
+end
+
+17. Monitoring
+
+W katalogu z instancją odpalamy
+
+bin/plugin -install lukas-vlcek/bigdesk
+
+a potem oczywiście restart i:
+
+http://localhost:9200/_plugin/bigdesk/#nodes
+
+Dodatkowo możemy użyć:
+
+bin/plugin -install karmi/elasticsearch-paramedic
+
+i potem: 
+
+http://localhost:9200/_plugin/paramedic/
+
+Inny bardzo przyjemny plugin:
+
+bin/plugin -install royrusso/elasticsearch-HQ
+
+i po wszystkim:
+
+http://localhost:9200/_plugin/HQ/ gdzie klikamy "Connect" :)
+
+18. Skalowanie ES
+
+Odpalamy nową instancję w oddzielnej powłoce bash, po czym wchodzimy na http://localhost:9200/_plugin/paramedic/ i możemy stwierdzić, że status klustera jest zielony, a był źółty (brak replikacji nodów).
+
+Dostęp do ustawień mamy np. dzięki wywołaniu http://localhost:9200/_cluster/settings a zmieniać je możemy poprzez zapytanie do klustera np:
+
+curl -XPUT http://localhost:9200/articles/_settings -d '{"number_of_replicas":1}'

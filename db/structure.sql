@@ -46,6 +46,38 @@ SET default_tablespace = '';
 SET default_with_oids = false;
 
 --
+-- Name: articles; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE TABLE articles (
+    id integer NOT NULL,
+    title character varying(255),
+    content text,
+    created_at timestamp without time zone,
+    updated_at timestamp without time zone
+);
+
+
+--
+-- Name: articles_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE articles_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: articles_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE articles_id_seq OWNED BY articles.id;
+
+
+--
 -- Name: categories; Type: TABLE; Schema: public; Owner: -; Tablespace: 
 --
 
@@ -174,6 +206,13 @@ UNION
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
+ALTER TABLE ONLY articles ALTER COLUMN id SET DEFAULT nextval('articles_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: -
+--
+
 ALTER TABLE ONLY categories ALTER COLUMN id SET DEFAULT nextval('categories_id_seq'::regclass);
 
 
@@ -189,6 +228,14 @@ ALTER TABLE ONLY documents ALTER COLUMN id SET DEFAULT nextval('documents_id_seq
 --
 
 ALTER TABLE ONLY pg_search_documents ALTER COLUMN id SET DEFAULT nextval('pg_search_documents_id_seq'::regclass);
+
+
+--
+-- Name: articles_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+--
+
+ALTER TABLE ONLY articles
+    ADD CONSTRAINT articles_pkey PRIMARY KEY (id);
 
 
 --
@@ -276,3 +323,5 @@ INSERT INTO schema_migrations (version) VALUES ('20140115130334');
 INSERT INTO schema_migrations (version) VALUES ('20140217083005');
 
 INSERT INTO schema_migrations (version) VALUES ('20140217084919');
+
+INSERT INTO schema_migrations (version) VALUES ('20140223102122');
