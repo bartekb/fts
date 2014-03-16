@@ -1,5 +1,12 @@
 <h1>Listing documents</h1>
 
+<div style="float: left;">
+  <ul>
+  <%= render :partial => "category", :collection => Category.all %>
+  </ul>
+</div>
+
+<div style="float: right: width: 80%;">
 <table>
   <thead>
     <tr>
@@ -17,7 +24,7 @@
       <tr>
         <td><%= document.title %></td>
         <td><%= document.body %></td>
-        <td><%= document.category %></td>
+        <td><%= document.category_title %></td>
         <td><%= link_to 'Show', document %></td>
         <td><%= link_to 'Edit', edit_document_path(document) %></td>
         <td><%= link_to 'Destroy', document, method: :delete, data: { confirm: 'Are you sure?' } %></td>
@@ -26,6 +33,9 @@
   </tbody>
 </table>
 
+<%= paginate @documents %>
+
 <br>
 
 <%= link_to 'New Document', new_document_path %>
+</div>

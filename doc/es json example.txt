@@ -1,0 +1,323 @@
+Krok 1
+
+curl -X PUT localhost:9200/hotels -d '
+{
+  "mappings": {
+    "hotel" : {
+      "properties" : {
+        "name" : { "type" : "string" },
+        "city" : { "type" : "string" },
+        "name_suggest" : {
+          "type" :     "completion"
+        }
+      }
+    }
+  }
+}'
+
+Krok 2
+
+curl -X PUT localhost:9200/hotels/hotel/1 -d '
+{
+  "name" :         "Mercure Hotel Munich",
+  "city" :         "Munich",
+  "name_suggest" : "Mercure Hotel Munich"
+}'
+
+curl -X PUT localhost:9200/hotels/hotel/2 -d '
+{
+  "name" :         "Hotel Monaco",
+  "city" :         "Munich",
+  "name_suggest" : "Hotel Monaco"
+}'
+
+curl -X PUT localhost:9200/hotels/hotel/3 -d '
+{
+  "name" :         "Courtyard by Marriot Munich City",
+  "city" :         "Munich",
+  "name_suggest" : "Courtyard by Marriot Munich City"
+}'
+
+Krok 3
+
+curl -X POST localhost:9200/hotels/_suggest -d '
+{
+  "hotels" : {
+    "text" : "m",
+    "completion" : {
+      "field" : "name_suggest"
+    }
+  }
+}'
+
+
+Krok 4
+
+Wielokrotne wyniki. Aby to osiągnąć musimy dokonać reindeksacji:
+
+curl -X PUT localhost:9200/hotels/hotel/1 -d '
+{
+  "name" :         "Mercure Hotel Munich",
+  "city" :         "Munich",
+  "name_suggest" : {
+    "input" :      [
+      "Mercure Hotel Munich",
+      "Mercure Munich"
+    ]
+  }
+}'
+
+curl -X PUT localhost:9200/hotels/hotel/2 -d '
+{
+  "name" :         "Hotel Monaco",
+  "city" :         "Munich",
+  "name_suggest" : {
+    "input" :      [
+      "Monaco Munich",
+      "Hotel Monaco"
+    ]
+  }
+}'
+
+curl -X PUT localhost:9200/hotels/hotel/3 -d '
+{
+  "name" :         "Courtyard by Marriot Munich City",
+  "city" :         "Munich",
+  "name_suggest" : {
+    "input" :      [
+      "Courtyard by Marriot Munich City",
+      "Marriot Munich City"
+    ]
+  }
+}'
+
+Krok 5
+
+Ponownie pukamy po sugestie:
+
+curl -X POST localhost:9200/hotels/_suggest -d '
+{
+  "hotels" : {
+    "text" : "m",
+    "completion" : {
+      "field" : "name_suggest"
+    }
+  }
+}'
+
+Krok 6
+
+Unifikacja rezultatów:
+
+curl -X PUT localhost:9200/hotels/hotel/1 -d '
+{
+  "name" :         "Mercure Hotel Munich",
+  "city" :         "Munich",
+  "name_suggest" : {
+    "input" :      [
+      "Mercure Hotel Munich",
+      "Mercure Munich"
+    ],
+    "output":      "Hotel Mercure"
+  }
+}'
+
+curl -X PUT localhost:9200/hotels/hotel/2 -d '
+{
+  "name" :         "Hotel Monaco",
+  "city" :         "Munich",
+  "name_suggest" : {
+    "input" :      [
+      "Monaco Munich",
+      "Hotel Monaco"
+    ],
+    "output":      "Hotel Monaco"
+  }
+}'
+
+curl -X PUT localhost:9200/hotels/hotel/3 -d '
+{
+  "name" :         "Courtyard by Marriot Munich City",
+  "city" :         "Munich",
+  "name_suggest" : {
+    "input" :      [
+      "Courtyard by Marriot Munich City",
+      "Marriot Munich City"
+    ],
+    "output":      "Hotel Marriot"
+  }
+}'
+
+Krok 7
+
+Ranking wyników
+
+curl -X PUT localhost:9200/hotels/hotel/1 -d '
+{
+  "name" :         "Mercure Hotel Munich",
+  "city" :         "Munich",
+  "name_suggest" : {
+    "input" :      [
+      "Mercure Hotel Munich",
+      "Mercure Munich"
+    ],
+    "output":      "Hotel Mercure",
+    "weight":      5
+  }
+}'
+
+curl -X PUT localhost:9200/hotels/hotel/2 -d '
+{
+  "name" :         "Hotel Monaco",
+  "city" :         "Munich",
+  "name_suggest" : {
+    "input" :      [
+      "Monaco Munich",
+      "Hotel Monaco"
+    ],
+    "output":      "Hotel Monaco",
+    "weight":      10
+  }
+}'
+
+curl -X PUT localhost:9200/hotels/hotel/3 -d '
+{
+  "name" :         "Courtyard by Marriot Munich City",
+  "city" :         "Munich",
+  "name_suggest" : {
+    "input" :      [
+      "Courtyard by Marriot Munich City",
+      "Marriot Munich City"
+    ],
+    "output":      "Hotel Marriot",
+    "weight":      15
+  }
+}'
+
+Krok 8
+
+Payload - dodawanie czego tylko chcemy do wyników
+
+curl -X DELETE localhost:9200/hotels
+curl -X PUT localhost:9200/hotels -d '
+{
+  "mappings": {
+    "hotel" : {
+      "properties" : {
+        "name" : { "type" : "string" },
+        "city" : { "type" : "string" },
+        "name_suggest" : {
+          "type" :     "completion",
+          "payloads" : true
+        }
+      }
+    }
+  }
+}'
+
+po czym wrzucamy dane do FTS-a:
+
+curl -X PUT localhost:9200/hotels/hotel/3 -d '
+{
+  "name" :         "Courtyard by Marriot Munich City",
+  "city" :         "Munich",
+  "name_suggest" : {
+    "input" :      [
+      "Courtyard by Marriot Munich City",
+      "Marriot Munich City"
+    ],
+    "output":      "Hotel Marriot",
+    "weight":      15,
+    "payload":     { "hotel_id": 3}
+  }
+}'
+
+Krok 9 
+
+Synonimy
+
+curl -X DELETE localhost:9200/hotels
+curl -X PUT localhost:9200/hotels -d '
+{
+  "settings": {
+    "analysis": {
+      "analyzer": {
+        "suggest_synonyms": {
+          "type":      "custom",
+          "tokenizer": "lowercase",
+          "filter":    [ "my_synonyms" ]
+        }
+      },
+      "filter": {
+        "my_synonyms": {
+          "type":     "synonym",
+          "synonyms": [ "courtyard, marriot" ]
+        }
+      }
+    }
+  },
+  "mappings": {
+    "hotel" : {
+      "properties" : {
+        "name" : { "type" : "string" },
+        "city" : { "type" : "string" },
+        "name_suggest" : {
+          "type" :            "completion",
+          "index_analyzer" :  "suggest_synonyms",
+          "search_analyzer" : "suggest_synonyms"
+        }
+      }
+    }
+  }
+}'
+
+teraz reload indexu:
+
+curl -X PUT 'localhost:9200/hotels/hotel/3?refresh=true' -d '
+{
+  "name" :         "Courtyard Hotel",
+  "city" :         "Munich",
+  "name_suggest" : "Courtyard Hotel"
+}'
+
+Krok 10
+
+Słowa, kŧórych nie chcemy szukać:
+
+curl -X DELETE localhost:9200/hotels
+curl -X PUT localhost:9200/hotels -d '
+{
+  "mappings": {
+    "hotel" : {
+      "properties" : {
+        "name" : { "type" : "string" },
+        "city" : { "type" : "string" },
+        "name_suggest" : {
+          "type" :            "completion",
+          "index_analyzer" :  "standard",
+          "search_analyzer" : "standard",
+
+          "preserve_position_increments": false,
+          "preserve_separators": false
+        }
+      }
+    }
+  }
+}'
+
+Krok 11 
+
+Fuzzy finder :)
+
+curl -X POST 'localhost:9200/hotels/_suggest?pretty' -d '
+{
+  "hotels" : {
+    "text" : "coutr",
+    "completion" : {
+      "field" : "name_suggest",
+      "fuzzy" : {
+        "edit_distance" : 2
+      }
+    }
+  }
+}'
