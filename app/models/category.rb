@@ -1,7 +1,5 @@
 class Category < ActiveRecord::Base
-  include PgSearch
-
+  #include PgSearch
   has_many :documents
-
-  multisearchable :against => [:title]
+  #multisearchable :against => [:title]
 end

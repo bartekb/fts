@@ -1,0 +1,158 @@
+SPHINX
+
+1. Pobieramy Sphinxa
+
+wget http://sphinxsearch.com/files/sphinx-2.1.6-release.tar.gz
+
+2. Rozpakowujemy Sphinxa
+
+tar xzvf sphinx-2.1.6-release.tar.gz
+
+3. Instalujemy Sphinxa
+
+sudo apt-get install libmysqlclient15-dev
+
+./configure --with-pgsql
+make -j4
+sudo make install
+
+4. Instalujemy TS - niestety konieczny jest też mysql 
+
+gem 'mysql2',          '0.3.12b5', :platform => :ruby
+gem 'thinking-sphinx', '~> 3.1.0'
+
+5. Indeksujemy i przyglądamy się plikowi konfiguracyjnemu
+
+rake ts:index
+
+cat config/development.sphinx.conf
+
+6. Odpalamy Sphinxa
+
+rake ts:start
+
+7. Próbujemy prostego szukania w konsoli
+
+Document.search "est"
+Document.search "corrupti", :order => :created_at, :sort_mode => :desc
+Document.search "corrupti", :with => {:category_id => 5}
+Document.search :conditions => {:title => "Document 5.3"}
+Document.search 'est', :with_all => {:category_id => Category.all.collect(&:id)}
+Document.search 'est', :conditions => {:title => 'Document 1.1'}, :with => {:created_at => 1.year.ago..Time.now}
+
+8. Reindeksacja + specjalne znaki
+
+8.1 Niesety Sphinx nie wspiera aktualiacji poszczególnych kolumn w momencie zmiany (zmiany różnicowej). Ze względu na to musimy dodać kolumnę, która będzie przechowywała informacje o róznicy - tzw index delta.
+
+8.2 Dodajemy odpowiednią migrację
+
+rails g migration add_delta_to_documents delta:boolean
+
+8.3 Modyfikujemy definicję indexu
+
+ThinkingSphinx::Index.define :document, :with => :active_record, :delta => true do ...
+
+8.4 Reindeksujemy dane
+
+rake ts:rebuild
+
+8.5 Wykonujemy test
+
+Document.search Riddle::Query.escape("bartek@polcode.pl")
+
+powinniśmy dostać null
+
+d = Document.last
+d.body = "for testing - bartek@polcode.pl"
+d.save!
+Document.search Riddle::Query.escape("bartek@polcode.pl")
+
+9. Facets - grupowanie
+
+Dodajemy do definicji indexu - :facet => true, czyli:
+
+indexes category.title, :as => :category, :sortable => true, :facet => true
+
+Po wszystki oczywiście rebuild
+
+rake ts:rebuild
+
+oraz
+
+ThinkingSphinx.facets('category', :class_facet => false).first
+
+10. Geolokacja
+
+10.1 Dodajemy odpowiednią migrację:
+
+rails g migration add_geolocations_to_documents latitude:float longitude:float
+
+10.2 Modyfikujemy definicję indeksu
+
+has "RADIANS(latitude)",  :as => :latitude,  :type => :float
+has "RADIANS(longitude)", :as => :longitude, :type => :float
+
+group_by 'latitude', 'longitude'
+
+10.3 OCzywiście rebuild
+
+rake ts:rebuild
+
+10.4 Potrzebujemy konwerter ze stopnii na radiany
+
+gem "geocoder"
+
+10.5 Jakieś dane przykładowe?
+
+Document.create :title => "Katowice - miasto", :latitude => 50.257234, :longitude => 19.022484
+Document.create :title => "Warszawa - miasto", :latitude => 52.227274, :longitude => 21.008606
+
+10.6 Wyszukaj od najbliższego po najdalsze
+
+Document.search("miasto", :geo => Geocoder::Calculations.to_radians([50.807853, 19.114666]), :order => "geodist ASC")
+
+10.7 Znajdź w promieniu 100 km
+
+Document.search("miasto", :geo => Geocoder::Calculations.to_radians([50.807853, 19.114666]), :with => {:geodist => 0.0..100_000.0})
+
+SOLR
+
+1. Dodajemy odpowiednie gemy
+
+gem 'sunspot_rails'
+gem 'sunspot_solr'
+
+2. Generujemy config
+
+rails g sunspot_rails:install
+
+3. Odpalamy instancję serwera jako daemon
+
+rake sunspot:solr:start
+
+LUB jako proces
+
+rake sunspot:solr:run
+
+4. Tworzymy definicję indeksu w modelu
+
+  searchable do
+    text :title, :body
+    text :category_name do
+      category ? category.title : "none"
+    end
+
+    integer :category_id
+    time    :created_at
+    time    :updated_at
+  end
+
+5. Reindeksujemy dokumenty w Solr
+
+Document.reindex
+
+6. Szukamy prostej rzeczy
+
+Document.search{ fulltext 'miasto' }.results
+
+

@@ -33,5 +33,11 @@ group :doc do
 end
 
 gem 'faker'
-gem 'textacular', '~> 3.0'
-gem 'pg_search'
+# gem 'textacular', '~> 3.0'
+# gem 'pg_search'
+#gem 'mysql2',          '0.3.12b5', :platform => :ruby
+#gem 'thinking-sphinx', '~> 3.1.0'
+#gem 'geocoder'
+gem 'sunspot_rails'
+gem 'sunspot_solr' # optional pre-packaged Solr distribution for use in development
+
